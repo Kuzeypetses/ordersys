@@ -1,5 +1,4 @@
 const state = { products: [], grouped: new Map(), order: new Map(), lastFile: null, lastFileName: null };
-const EXIT_URL = 'about:blank'; // Gerekirse şirket portalı URL'si ile değiştirin.
 const $ = (id) => document.getElementById(id);
 const fmtTL = (n) => new Intl.NumberFormat('tr-TR', { style:'currency', currency:'TRY' }).format(Number(n || 0));
 function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),3200); }
@@ -61,24 +60,17 @@ function escapeAttr(s){ return escapeHtml(s).replace(/`/g,'&#096;'); }
 function setQty(code, val){ const n=Math.max(0, parseInt(val,10)||0); if(n) state.order.set(code,n); else state.order.delete(code); updateTotals(); }
 function updateTotals(){ let qty=0, amount=0; for(const p of state.products){ const q=state.order.get(p.code)||0; qty+=q; amount+=q*p.price; } $('totalQty').textContent=qty; $('totalAmount').textContent=fmtTL(amount); }
 function selectedRows(){ return state.products.map(p => ({...p, qty:state.order.get(p.code)||0})).filter(p=>p.qty>0); }
-function validateOrder(){
-  const salesRep = $('salesRep').value.trim();
-  const code = $('customerCode').value.trim();
-  if(!salesRep) throw new Error('Satış temsilcisi ad soyadını giriniz.');
-  if(!code) throw new Error('Müşteri kodu giriniz.');
-  if(!selectedRows().length) throw new Error('Siparişte miktar girilmiş ürün yok.');
-}
 function buildWorkbook(){
-  validateOrder();
-  const salesRep = $('salesRep').value.trim(); const code = $('customerCode').value.trim(); const title = $('customerTitle').value.trim();
-  const rows = selectedRows();
-  const data = [ ['KUZEYPET SİPARİŞ FORMU'], [], ['Satış Temsilcisi', salesRep], ['Müşteri Kodu', code], ['Müşteri Ünvanı', title], ['Sipariş Tarihi', excelDate()], [], ['Sıra','Ürün Kodu','Ürün','Liste Fiyatı','Adet','Satır Toplamı'] ];
+  const code = $('customerCode').value.trim(); const title = $('customerTitle').value.trim();
+  if(!code) throw new Error('Müşteri kodu giriniz.');
+  const rows = selectedRows(); if(!rows.length) throw new Error('Siparişte miktar girilmiş ürün yok.');
+  const data = [ ['KUZEYPET SİPARİŞ FORMU'], [], ['Müşteri Kodu', code], ['Müşteri Ünvanı', title], ['Sipariş Tarihi', excelDate()], [], ['Sıra','Ürün Kodu','Ürün','Liste Fiyatı','Adet','Satır Toplamı'] ];
   let i=1, totalQty=0, totalAmount=0;
   for(const p of rows){ const line=p.qty*p.price; totalQty+=p.qty; totalAmount+=line; data.push([i++, p.code, p.name, p.price, p.qty, line]); }
   data.push([], ['', '', '', 'Toplam Kalem', rows.length, ''], ['', '', '', 'Toplam Adet', totalQty, ''], ['', '', '', 'Genel Toplam', '', totalAmount]);
   const wb = XLSX.utils.book_new(); const ws = XLSX.utils.aoa_to_sheet(data);
   ws['!cols'] = [{wch:8},{wch:16},{wch:44},{wch:14},{wch:10},{wch:16}];
-  ws['!freeze'] = {xSplit:0, ySplit:8};
+  ws['!freeze'] = {xSplit:0, ySplit:7};
   XLSX.utils.book_append_sheet(wb, ws, 'Sipariş'); return wb;
 }
 function createOrderFile(){
@@ -89,85 +81,22 @@ function createOrderFile(){
 }
 function downloadFile(file){ const a=document.createElement('a'); a.href=URL.createObjectURL(file); a.download=file.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
 async function saveOrder(){ try{ const file=createOrderFile(); downloadFile(file); toast(`${file.name} oluşturuldu.`); }catch(e){ toast(e.message); } }
-function fileToBase64(file){
-  return new Promise((resolve,reject)=>{
-    const reader=new FileReader();
-    reader.onload=()=>resolve(String(reader.result).split(',')[1]);
-    reader.onerror=()=>reject(new Error('Excel dosyası mail için hazırlanamadı.'));
-    reader.readAsDataURL(file);
-  });
-}
-function openMailModal(){
+async function shareOrder(){
   try{
-    validateOrder();
-    const modal=$('mailModal');
-    $('recipientEmailModal').value='didemhan@kuzeypet.com';
-    $('mailModalStatus').textContent='';
-    modal.hidden=false;
-    document.body.classList.add('modal-open');
-    setTimeout(()=>$('recipientEmailModal').focus(),50);
+    const file=createOrderFile();
+    const code=$('customerCode').value.trim(); const title=$('customerTitle').value.trim();
+    const subject=`KuzeyPet Sipariş - ${code} - ${title}`;
+    const text='Merhaba,\n\nSipariş dosyam ektedir.\n\nİyi çalışmalar.';
+    if(navigator.canShare && navigator.canShare({ files:[file] })){
+      await navigator.share({ files:[file], title:subject, text });
+      toast('Paylaşım ekranı açıldı. Mail uygulamasını seçebilirsiniz.');
+    } else {
+      downloadFile(file);
+      window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text + '\n\nNot: Tarayıcı ek dosyayı otomatik iliştiremediği için indirilen Excel dosyasını ekleyiniz: ' + file.name)}`;
+      toast('Excel indirildi. Açılan mail taslağına dosyayı ekleyiniz.');
+    }
   }catch(e){ toast(e.message); }
 }
-function closeMailModal(){
-  if($('confirmMailBtn').disabled) return;
-  $('mailModal').hidden=true;
-  document.body.classList.remove('modal-open');
-  $('mailModalStatus').textContent='';
-}
-async function confirmMailSend(){
-  const recipientEmail=$('recipientEmailModal').value.trim();
-  const btn=$('confirmMailBtn');
-  const status=$('mailModalStatus');
-  try{
-    if(!recipientEmail) throw new Error('E-posta adresi giriniz.');
-    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail)) throw new Error('Geçerli bir e-posta adresi giriniz.');
-    const file=createOrderFile();
-    btn.disabled=true; btn.textContent='Gönderiliyor...';
-    status.textContent='Excel hazırlanıyor ve mail gönderiliyor...';
-    const payload={
-      salesRep:$('salesRep').value.trim(),
-      customerCode:$('customerCode').value.trim(),
-      customerTitle:$('customerTitle').value.trim(),
-      recipientEmail,
-      fileName:file.name,
-      fileBase64:await fileToBase64(file)
-    };
-    const res=await fetch('/api/send-order', {
-      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
-    });
-    let result={};
-    try{ result=await res.json(); }catch(_e){}
-    if(!res.ok) throw new Error(result.error || `Mail gönderilemedi (${res.status}).`);
-    status.textContent='Mail başarıyla gönderildi.';
-    toast(`Sipariş ${recipientEmail} adresine gönderildi.`);
-    setTimeout(()=>{ btn.disabled=false; btn.textContent='Gönder'; closeMailModal(); },700);
-    return;
-  }catch(e){
-    status.textContent=e.message || 'Mail gönderilemedi.';
-  }
-  btn.disabled=false; btn.textContent='Gönder';
-}
-function logout(){
-  state.order.clear();
-  ['salesRep','customerCode','customerTitle','searchBox'].forEach(id=>{ const el=$(id); if(el) el.value=''; });
-  sessionStorage.clear();
-  localStorage.removeItem('kuzeypet-order');
-  if(EXIT_URL==='about:blank') window.location.replace('about:blank');
-  else window.location.replace(EXIT_URL);
-}
 document.addEventListener('input', e => { if(e.target.id==='searchBox') renderProducts(); if(e.target.matches('.qty input')) setQty(e.target.dataset.code, e.target.value); });
-document.addEventListener('keydown', e => {
-  if(e.key==='Escape' && !$('mailModal').hidden) closeMailModal();
-  if(e.key==='Enter' && e.target.id==='recipientEmailModal'){ e.preventDefault(); confirmMailSend(); }
-});
-document.addEventListener('click', e => {
-  if(e.target.id==='mailModal') closeMailModal();
-  const b=e.target.closest('button'); if(!b) return;
-  if(b.id==='saveBtn') saveOrder();
-  if(b.id==='mailBtn') openMailModal();
-  if(b.id==='confirmMailBtn') confirmMailSend();
-  if(b.id==='cancelMailBtn' || b.id==='closeMailModal') closeMailModal();
-  if(b.id==='logoutBtn') logout();
-  if(b.dataset.act){ const code=b.dataset.code; const current=state.order.get(code)||0; setQty(code, b.dataset.act==='inc'?current+1:current-1); const input=document.querySelector(`.qty input[data-code="${CSS.escape(code)}"]`); if(input) input.value=state.order.get(code)||0; }
-});
+document.addEventListener('click', e => { const b=e.target.closest('button'); if(!b) return; if(b.id==='saveBtn') saveOrder(); if(b.id==='shareBtn') shareOrder(); if(b.dataset.act){ const code=b.dataset.code; const current=state.order.get(code)||0; setQty(code, b.dataset.act==='inc'?current+1:current-1); const input=document.querySelector(`.qty input[data-code="${CSS.escape(code)}"]`); if(input) input.value=state.order.get(code)||0; } });
 window.addEventListener('load', loadProducts);

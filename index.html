@@ -22,7 +22,6 @@
     </header>
 
     <section class="card customer-card">
-      <label>Satış Temsilcisi<input id="salesRep" inputmode="text" autocomplete="name" placeholder="Ad Soyad" /></label>
       <label>Müşteri Kodu<input id="customerCode" inputmode="text" autocomplete="off" placeholder="Örn. B320" /></label>
       <label>Müşteri Ünvanı<input id="customerTitle" inputmode="text" autocomplete="organization" placeholder="Müşteri ünvanı" /></label>
       <label>Ürün Ara<input id="searchBox" inputmode="search" autocomplete="off" placeholder="Ürün adı veya kodu yazın" /></label>
@@ -38,27 +37,8 @@
     </main>
 
     <footer class="actions">
-      <button id="saveBtn" class="secondary">Excel İndir</button>
-      <button id="mailBtn" class="primary">Mail Gönder</button>
-      <button id="logoutBtn" class="danger">Çıkış Yap</button>
+      <button id="saveBtn" class="secondary">Excel Oluştur / İndir</button>
     </footer>
-  </div>
-
-  <div id="mailModal" class="modal-backdrop" hidden>
-    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="mailModalTitle">
-      <button id="closeMailModal" class="modal-close" type="button" aria-label="Kapat">×</button>
-      <div class="modal-icon">✉</div>
-      <h2 id="mailModalTitle">Siparişi Mail ile Gönder</h2>
-      <p>Excel sipariş dosyasının gönderileceği e-posta adresini yazın.</p>
-      <label class="modal-label">E-posta Adresi
-        <input id="recipientEmailModal" type="email" inputmode="email" autocomplete="email" placeholder="ornek@firma.com" />
-      </label>
-      <div class="modal-actions">
-        <button id="cancelMailBtn" class="secondary" type="button">Vazgeç</button>
-        <button id="confirmMailBtn" class="primary" type="button">Gönder</button>
-      </div>
-      <div id="mailModalStatus" class="modal-status" aria-live="polite"></div>
-    </div>
   </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
